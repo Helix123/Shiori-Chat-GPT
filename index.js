@@ -11,9 +11,8 @@ const client = new Client({
   ],
 });
 
-const keepAlive = require('./alive.js')
-keepAlive()
-
+const keepAlive = require('./alive.js');
+keepAlive();
 
 client.on('ready', () => {
   console.log('The bot is online!');
@@ -31,22 +30,43 @@ client.on('messageCreate', async (message) => {
   let conversationLog = [{ role: 'system', content: 'You are a friendly chatbot.' }];
 
   try {
-    const result = await openai.createChatCompletion({
-      model: 'gpt-3.5-turbo',
-      messages: conversationLog,
-      // max_tokens: 256, // limit token usage
-    }).catch((error) => {
-      console.log(`OPENAI ERR: ${error}`);
+    let prevMessages;
+    if (message.channel.type === 'GUILD_TEXT') {
+      // Fetch previous messages in the guild text channel
+      prevMessages = await message.channel.messages.fetch({ limit: 15 });
+      prevMessages.reverse();
+    } else if (message.channel.type === 'DM') {
+      // Fetch previous messages in the private message
+      prevMessages = await message.channel.messages.fetch({ limit: 15 });
+    }
+
+    prevMessages.forEach((msg) => {
+      if (message.content.startsWith('!')) return;
+      if (msg.author.id !== client.user.id && message.author.bot) return;
+      if (msg.author.id !== message.author.id) return;
+
+      conversationLog.push({
+        role: 'user',
+        content: msg.content,
+      });
     });
 
-    // Determine the channel type (server or DM)
-    const channelType = message.channel.type;
+    const result = await openai
+      .createChatCompletion({
+        model: 'gpt-3.5-turbo',
+        messages: conversationLog,
+        // max_tokens: 256, // limit token usage
+      })
+      .catch((error) => {
+        console.log(`OPENAI ERR: ${error}`);
+      });
 
-    // Send the response to the appropriate channel
-    if (channelType === 'DM') {
-      message.channel.send(result.data.choices[0].message);
-    } else if (channelType === 'GUILD_TEXT') {
+    if (message.channel.type === 'GUILD_TEXT') {
+      // Send the reply to the guild text channel
       message.reply(result.data.choices[0].message);
+    } else if (message.channel.type === 'DM') {
+      // Send the reply as a direct message to the user
+      message.author.send(result.data.choices[0].message);
     }
   } catch (error) {
     console.log(`ERR: ${error}`);
