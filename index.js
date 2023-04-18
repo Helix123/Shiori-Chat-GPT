@@ -27,7 +27,7 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content.startsWith('!')) return;
 
-  let conversationLog = [{ role: 'system', content: 'You are a friendly chatbot.' }];
+  let conversationLog = []; // Remove the initial "system" message from conversation log
 
   try {
     let prevMessages;
@@ -74,3 +74,4 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(process.env.TOKEN);
+
