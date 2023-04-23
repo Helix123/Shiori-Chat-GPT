@@ -61,17 +61,16 @@ client.on('messageCreate', async (message) => {
         console.log(`OPENAI ERR: ${error}`);
       });
 
+    // Send the reply to the appropriate channel
     if (message.channel.type === 'GUILD_TEXT') {
-      // Send the reply to the guild text channel
       message.reply(result.data.choices[0].message);
-    } else if (message.channel.type === 'DM') {
-      // Send the reply as a direct message to the user
-      message.author.send(result.data.choices[0].message);
+    } else if (message.channel.type === 'DM' || message.channel.type === 'GROUP_DM') {
+      message.channel.send(result.data.choices[0].message);
     }
   } catch (error) {
     console.log(`ERR: ${error}`);
   }
 });
 
-client.login(process.env.TOKEN);
 
+client.login(process.env.TOKEN);
