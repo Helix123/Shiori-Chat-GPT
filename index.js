@@ -1,5 +1,6 @@
 const { Client, Intents } = require('discord.js');
 const { Configuration, OpenAIApi } = require('openai');
+const fetch = require('node-fetch');
 
 const client = new Client({
   intents: [
@@ -15,7 +16,15 @@ const keepAlive = require('./alive.js');
 keepAlive();
 
 client.on('ready', () => {
-  console.log('The bot is online!');
+  console.log(`Logged in as ${client.user.tag}`);
+  client.application.commands.create({
+    name: 'restrict',
+    description: 'Restricts Shiori from talking',
+  });
+  client.application.commands.create({
+    name: 'unrestrict',
+    description: 'Unrestricts Shiori',
+  });
 });
 
 const configuration = new Configuration({
@@ -23,20 +32,38 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
+let restrictedChannels = new Set(); // Set of restricted channels
+
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (message.content.startsWith('!')) return;
+  if (message.content.startsWith('!')) {
+    if (message.content === '!restrict') {
+      if (!restrictedChannels.has(message.channel.id)) {
+        restrictedChannels.add(message.channel.id);
+        message.reply('Chat permission denied');
+      } else {
+        message.reply('Already restricted.');
+      }
+    } else if (message.content === '!unrestrict') {
+      if (restrictedChannels.has(message.channel.id)) {
+        restrictedChannels.delete(message.channel.id);
+        message.reply('Chat permission given.');
+      } else {
+        message.reply('Already unrestricted');
+      }
+    }
+    return;
+  }
+  if (restrictedChannels.has(message.channel.id)) return; // Check if channel is restricted
 
-  let conversationLog = []; // Remove the initial "system" message from conversation log
+  let conversationLog = [];
 
   try {
     let prevMessages;
     if (message.channel.type === 'GUILD_TEXT') {
-      // Fetch previous messages in the guild text channel
       prevMessages = await message.channel.messages.fetch({ limit: 15 });
       prevMessages.reverse();
     } else if (message.channel.type === 'DM') {
-      // Fetch previous messages in the private message
       prevMessages = await message.channel.messages.fetch({ limit: 15 });
     }
 
@@ -55,13 +82,11 @@ client.on('messageCreate', async (message) => {
       .createChatCompletion({
         model: 'gpt-3.5-turbo',
         messages: conversationLog,
-        // max_tokens: 256, // limit token usage
       })
       .catch((error) => {
         console.log(`OPENAI ERR: ${error}`);
       });
 
-    // Send the reply to the appropriate channel
     if (message.channel.type === 'GUILD_TEXT') {
       message.reply(result.data.choices[0].message);
     } else if (message.channel.type === 'DM' || message.channel.type === 'GROUP_DM') {
@@ -72,5 +97,27 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isCommand()) return;
+
+  const { commandName } = interaction;
+
+  if (commandName === 'restrict') {
+    if (!restrictedChannels.has(interaction.channelId)) {
+      restrictedChannels.add(interaction.channelId);
+      await interaction.reply('Chat permission denied');
+    } else {
+      await interaction.reply('Already restricted.');
+    }
+  } else if (commandName === 'unrestrict') {
+    if (restrictedChannels.has(interaction.channelId)) {
+      restrictedChannels.delete(interaction.channelId);
+      message.reply('Chat permission given.');
+      } else {
+        message.reply('Already unrestricted');
+    }
+  }
+  return;
+});
 
 client.login(process.env.TOKEN);
