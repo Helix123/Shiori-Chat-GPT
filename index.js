@@ -1,6 +1,7 @@
 const { Client, Intents } = require('discord.js');
 const { Configuration, OpenAIApi } = require('openai');
 const fetch = require('node-fetch');
+const fs = require('fs');
 
 const client = new Client({
   intents: [
@@ -14,6 +15,16 @@ const client = new Client({
 
 const keepAlive = require('./alive.js');
 keepAlive();
+
+const RESTRICTED_CHANNELS_FILE = './restricted_channels.json';
+
+// Load restricted channels from file
+let restrictedChannels = new Set();
+if (fs.existsSync(RESTRICTED_CHANNELS_FILE)) {
+  const data = fs.readFileSync(RESTRICTED_CHANNELS_FILE);
+  const { restrictedChannels: savedRestrictedChannels } = JSON.parse(data);
+  savedRestrictedChannels.forEach(channelId => restrictedChannels.add(channelId));
+}
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -32,8 +43,6 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-let restrictedChannels = new Set(); // Set of restricted channels
-
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content.startsWith('!')) {
@@ -41,6 +50,7 @@ client.on('messageCreate', async (message) => {
       if (!restrictedChannels.has(message.channel.id)) {
         restrictedChannels.add(message.channel.id);
         message.reply('Chat permission denied');
+        saveRestrictedChannels();
       } else {
         message.reply('Already restricted.');
       }
@@ -48,6 +58,7 @@ client.on('messageCreate', async (message) => {
       if (restrictedChannels.has(message.channel.id)) {
         restrictedChannels.delete(message.channel.id);
         message.reply('Chat permission given.');
+        saveRestrictedChannels();
       } else {
         message.reply('Already unrestricted');
       }
@@ -106,6 +117,7 @@ client.on('interactionCreate', async interaction => {
     if (!restrictedChannels.has(interaction.channelId)) {
       restrictedChannels.add(interaction.channelId);
       await interaction.reply('Chat permission denied');
+      saveRestrictedChannels();
     } else {
       await interaction.reply('Already restricted.');
     }
@@ -113,6 +125,7 @@ client.on('interactionCreate', async interaction => {
     if (restrictedChannels.has(interaction.channelId)) {
       restrictedChannels.delete(interaction.channelId);
       message.reply('Chat permission given.');
+      saveRestrictedChannels();
       } else {
         message.reply('Already unrestricted');
     }
@@ -120,4 +133,11 @@ client.on('interactionCreate', async interaction => {
   return;
 });
 
+// Save restricted channels to file
+function saveRestrictedChannels() {
+  const data = JSON.stringify({ restrictedChannels: [...restrictedChannels] });
+  fs.writeFileSync(RESTRICTED_CHANNELS_FILE, data);
+}
+
 client.login(process.env.TOKEN);
+
