@@ -124,10 +124,10 @@ client.on('interactionCreate', async interaction => {
   } else if (commandName === 'unrestrict') {
     if (restrictedChannels.has(interaction.channelId)) {
       restrictedChannels.delete(interaction.channelId);
-      message.reply('Chat permission given.');
+      await interaction.reply('Chat permission given.');
       saveRestrictedChannels();
       } else {
-        message.reply('Already unrestricted');
+        await interaction.reply('Already unrestricted');
     }
   }
   return;
