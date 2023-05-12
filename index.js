@@ -8,10 +8,10 @@ const client = new Client({
     Intents.FLAGS.GUILDS,
     Intents.FLAGS.GUILD_MESSAGES,
     Intents.FLAGS.GUILD_MESSAGE_TYPING,
-    Intents.FLAGS.DIRECT_MESSAGES,
-    Intents.FLAGS.DIRECT_MESSAGE_TYPING,
+    Intents.FLAGS.DIRECT_MESSAGES
   ],
 });
+
 
 const keepAlive = require('./alive.js');
 keepAlive();
@@ -66,6 +66,13 @@ client.on('messageCreate', async (message) => {
     return;
   }
   if (restrictedChannels.has(message.channel.id)) return; // Check if channel is restricted
+  
+   const greetings = ['hello', 'hi', 'hey', 'howdy', 'Sup', 'sup', 'what\'s up'];
+  if (greetings.includes(message.content.toLowerCase())) {
+    message.reply("Hi there! I'm Shiori, your friendly AI assistant. How can I help you today?");
+    return;
+  }
+
 
   let conversationLog = [];
 
@@ -76,6 +83,7 @@ client.on('messageCreate', async (message) => {
       prevMessages.reverse();
     } else if (message.channel.type === 'DM') {
       prevMessages = await message.channel.messages.fetch({ limit: 15 });
+      console.log('Received message in DM:', message.content); // Add console log
     }
 
     prevMessages.forEach((msg) => {
@@ -100,7 +108,7 @@ client.on('messageCreate', async (message) => {
 
     if (message.channel.type === 'GUILD_TEXT') {
       message.reply(result.data.choices[0].message);
-    } else if (message.channel.type === 'DM' || message.channel.type === 'GROUP_DM') {
+    } else if (message.channel.type === 'DM') {
       message.channel.send(result.data.choices[0].message);
     }
   } catch (error) {
@@ -140,4 +148,5 @@ function saveRestrictedChannels() {
 }
 
 client.login(process.env.TOKEN);
+
 
