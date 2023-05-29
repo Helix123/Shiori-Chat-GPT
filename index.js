@@ -8,33 +8,26 @@ const client = new Client({
     Intents.FLAGS.GUILDS,
     Intents.FLAGS.GUILD_MESSAGES,
     Intents.FLAGS.GUILD_MESSAGE_TYPING,
-    Intents.FLAGS.DIRECT_MESSAGES
   ],
 });
-
 
 const keepAlive = require('./alive.js');
 keepAlive();
 
-const RESTRICTED_CHANNELS_FILE = './restricted_channels.json';
+const SAVED_CHANNELS_FILE = './saved_channels.json';
 
-// Load restricted channels from file
-let restrictedChannels = new Set();
-if (fs.existsSync(RESTRICTED_CHANNELS_FILE)) {
-  const data = fs.readFileSync(RESTRICTED_CHANNELS_FILE);
-  const { restrictedChannels: savedRestrictedChannels } = JSON.parse(data);
-  savedRestrictedChannels.forEach(channelId => restrictedChannels.add(channelId));
+// Load saved channels from file
+let savedChannels = [];
+if (fs.existsSync(SAVED_CHANNELS_FILE)) {
+  const data = fs.readFileSync(SAVED_CHANNELS_FILE);
+  savedChannels = JSON.parse(data);
 }
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
   client.application.commands.create({
-    name: 'restrict',
-    description: 'Restricts Shiori from talking',
-  });
-  client.application.commands.create({
-    name: 'unrestrict',
-    description: 'Unrestricts Shiori',
+    name: 'setchannel',
+    description: 'Sets the channel where the bot will respond',
   });
 });
 
@@ -46,48 +39,37 @@ const openai = new OpenAIApi(configuration);
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (message.content.startsWith('!')) {
-    if (message.content === '!restrict') {
-      if (!restrictedChannels.has(message.channel.id)) {
-        restrictedChannels.add(message.channel.id);
-        message.reply('Chat permission denied');
-        saveRestrictedChannels();
+    if (message.content === '!setchannel') {
+      const channelId = message.channel.id;
+      if (!savedChannels.includes(channelId)) {
+        savedChannels = [channelId];
+        message.reply('Channel set. The bot will now only respond in this channel.');
+        saveChannels();
       } else {
-        message.reply('Already restricted.');
-      }
-    } else if (message.content === '!unrestrict') {
-      if (restrictedChannels.has(message.channel.id)) {
-        restrictedChannels.delete(message.channel.id);
-        message.reply('Chat permission given.');
-        saveRestrictedChannels();
-      } else {
-        message.reply('Already unrestricted');
+        message.reply('The bot is already restricted to this channel.');
       }
     }
     return;
   }
-  if (restrictedChannels.has(message.channel.id)) return; // Check if channel is restricted
-  
-   const greetings = ['hello', 'hi', 'hey', 'howdy', 'Sup', 'sup', 'what\'s up'];
+
+  const channelId = message.channel.id;
+  if (!savedChannels.includes(channelId)) return; // Check if channel is the saved channel
+
+  const greetings = ['hello', 'hi', 'hey', 'howdy', 'sup', "what's up"];
   if (greetings.includes(message.content.toLowerCase())) {
     message.reply("Hi there! I'm Shiori, your friendly AI assistant. How can I help you today?");
     return;
   }
 
-
   let conversationLog = [];
 
   try {
-    let prevMessages;
-    if (message.channel.type === 'GUILD_TEXT') {
-      prevMessages = await message.channel.messages.fetch({ limit: 15 });
-      prevMessages.reverse();
-    } else if (message.channel.type === 'DM') {
-      prevMessages = await message.channel.messages.fetch({ limit: 15 });
-      console.log('Received message in DM:', message.content); // Add console log
-    }
+    const prevMessages = await message.channel.messages.fetch({ limit: 15 });
+    const filteredMessages = prevMessages.filter(
+      (msg) => msg.author.id === client.user.id || msg.author.id === message.author.id
+    );
 
-    prevMessages.forEach((msg) => {
-      if (message.content.startsWith('!')) return;
+    filteredMessages.forEach((msg) => {
       if (msg.author.id !== client.user.id && message.author.bot) return;
       if (msg.author.id !== message.author.id) return;
 
@@ -106,47 +88,34 @@ client.on('messageCreate', async (message) => {
         console.log(`OPENAI ERR: ${error}`);
       });
 
-    if (message.channel.type === 'GUILD_TEXT') {
-      message.reply(result.data.choices[0].message);
-    } else if (message.channel.type === 'DM') {
-      message.channel.send(result.data.choices[0].message);
-    }
+    message.reply(result.data.choices[0].message);
   } catch (error) {
     console.log(`ERR: ${error}`);
   }
 });
 
-client.on('interactionCreate', async interaction => {
+client.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
 
   const { commandName } = interaction;
 
-  if (commandName === 'restrict') {
-    if (!restrictedChannels.has(interaction.channelId)) {
-      restrictedChannels.add(interaction.channelId);
-      await interaction.reply('Chat permission denied');
-      saveRestrictedChannels();
+  if (commandName === 'setchannel') {
+    const channelId = interaction.channelId;
+    if (!savedChannels.includes(channelId)) {
+      savedChannels = [channelId];
+      await interaction.reply('Channel set. The bot will now only respond in this channel.');
+      saveChannels();
     } else {
-      await interaction.reply('Already restricted.');
-    }
-  } else if (commandName === 'unrestrict') {
-    if (restrictedChannels.has(interaction.channelId)) {
-      restrictedChannels.delete(interaction.channelId);
-      await interaction.reply('Chat permission given.');
-      saveRestrictedChannels();
-      } else {
-        await interaction.reply('Already unrestricted');
+      await interaction.reply('The bot is already restricted to this channel.');
     }
   }
-  return;
 });
 
-// Save restricted channels to file
-function saveRestrictedChannels() {
-  const data = JSON.stringify({ restrictedChannels: [...restrictedChannels] });
-  fs.writeFileSync(RESTRICTED_CHANNELS_FILE, data);
+// Save channels to file
+function saveChannels() {
+  const data = JSON.stringify(savedChannels);
+  fs.writeFileSync(SAVED_CHANNELS_FILE, data);
 }
 
 client.login(process.env.TOKEN);
-
 
